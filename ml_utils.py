@@ -191,6 +191,7 @@ def train(train_text, train_labels, test_text, test_labels, classes_to_train=(0,
 
         # which class are we training?
         class_to_train = classes_to_train[i % len(classes_to_train)]
+        print("Trainig class ",class_to_train)
 
         # get the labels that we are training
         these_train_labels = [l[class_to_train] for l in train_labels]
@@ -213,20 +214,22 @@ def train(train_text, train_labels, test_text, test_labels, classes_to_train=(0,
         if sys.stdin in select.select([sys.stdin], [], [], 0)[0]:
             break
 
-        if i % 5 == 0:
+        if i % len(classes_to_train) == 0 and i!=0:
             print("Optimizing classifier... press any key to stop after current iteration...")
+            # break
 
         # generate feature_params
         params = dict()
         # get_feature_params returns a random configuration of parameters for extracting features
         # feel free to tweak that function
         params['feature_params'] = get_feature_params()
+        print(params['feature_params'])
 
         n_train = len(train_text)
         n_test = len(test_text)
 
         # 50% chance of using tfidf or a word2vec based model (if USE_WORD2VEC is True)
-        if np.random.rand() > .5 and USE_WORD2VEC:
+        if  USE_WORD2VEC:
             features = Text2Vec
             params['features'] = 'text2vec'
             params['feature_params']['word2vec'] = WORD2VEC_MODEL
@@ -249,7 +252,7 @@ def train(train_text, train_labels, test_text, test_labels, classes_to_train=(0,
         clf_params = {'C': np.logspace(-3, 1, 64)}
         clf = LinearSVC(class_weight='balanced')
         t1 = time.time()
-        search = GridSearchCV(clf, clf_params, cv=split, n_jobs=3, scoring='average_precision').fit(X, these_train_labels + these_test_labels)
+        search = GridSearchCV(clf, clf_params,cv=split, scoring='average_precision').fit(X, these_train_labels + these_test_labels)
         print("Grid search took {}s".format(time.time() - t1))
 
         # grab the best performing classifier/params/score
@@ -422,7 +425,7 @@ def score(train_text, train_labels, score_text, score_ids, classes_to_score=(0,)
         # optimize and fit classifier on our training set
         svm = SVC(class_weight='balanced', kernel='linear')
         clf_params = {'C': np.logspace(-3, 1, 64)}
-        search = GridSearchCV(svm, clf_params, n_jobs=3, scoring='average_precision').fit(X_train, these_train_labels)
+        search = GridSearchCV(svm, clf_params, scoring='average_precision',verbose=True).fit(X_train, these_train_labels)
         svm = search.best_estimator_
         svm.set_params(probability=True)
         svm.set_params(**params['clf_params'])
