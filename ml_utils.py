@@ -293,6 +293,8 @@ def analyze(train_text, train_labels, test_text, test_labels, classes_to_analyze
 
     if not os.path.exists('analysis'):
         os.mkdir('analysis')
+    if not os.path.exists('scores'):
+        os.mkdir('scores')
 
     for cls in classes_to_analyze:
 
@@ -318,15 +320,15 @@ def analyze(train_text, train_labels, test_text, test_labels, classes_to_analyze
         X_train = X[:n_train]
         X_test = X[n_train:]
 
-        folds = [-1] * n_train + [0] * n_test
-        split = PredefinedSplit(folds)
+        # folds = [-1] * n_train + [0] * n_test
+        # split = PredefinedSplit(folds)
 
         # optimize and fit classifier
         svm = SVC(class_weight='balanced', kernel='linear')
         svm.set_params(**params['clf_params'])
-        clf_params = {'C': np.logspace(-3, 1, 64)}
-        search = GridSearchCV(svm, clf_params, cv=split, n_jobs=3, scoring='average_precision').fit(X, these_train_labels + these_test_labels)
-        svm = search.best_estimator_
+        # clf_params = {'C': np.logspace(-3, 1, 64)}
+        # search = GridSearchCV(svm, clf_params, cv=split, n_jobs=3, scoring='average_precision').fit(X, these_train_labels + these_test_labels)
+        # svm = search.best_estimator_
         svm.set_params(probability=True)
         svm.fit(X_train, these_train_labels)
 
@@ -336,18 +338,20 @@ def analyze(train_text, train_labels, test_text, test_labels, classes_to_analyze
         predicted_classes = svm.predict_proba(X_test)
         # so, predicted_scores should be the probability for the positive class
         predicted_scores = predicted_classes[:, 1]
+        # print(predicted_classes[:3])
+        # exit(0)
 
         results['auc'] = float(roc_auc_score(these_test_labels, predicted_scores))
         # sometimes the 'auc' was <.5, which is weird because it just means the labels were flipped?
-        if results['auc'] < .5:
-            predicted_scores = predicted_classes[:, 0]
-            results['auc'] = float(roc_auc_score(these_test_labels, predicted_scores))
+        # if results['auc'] < .5:
+        #     predicted_scores = predicted_classes[:, 0]
+        #     results['auc'] = float(roc_auc_score(these_test_labels, predicted_scores))
 
         # this is kind of ad-hoc, but it's my way of finding a threshold that
         # "gets good precision with recall that doesn't suck"
         best_threshold = None
         target_precision = .9
-        min_recall = .2
+        min_recall = .4
         while best_threshold is None:
             for threshold in np.linspace(.99, .01, 100):
                 if precision_score(these_test_labels, (predicted_scores > threshold).astype(int)) > target_precision\
@@ -390,6 +394,26 @@ def analyze(train_text, train_labels, test_text, test_labels, classes_to_analyze
         with open('analysis/analysis_class{}.txt'.format(cls), 'w') as f:
             json.dump(results, f, indent=2)
 
+        all_scores = np.append(svm.predict_proba(X_train)[:,1],predicted_scores)
+
+        out_filename = 'scores/output{}.xlsx'.format(cls)
+        writer = pd.ExcelWriter(out_filename)
+        
+        df1 = pd.DataFrame({'Tweet':train_text+test_text,'Score':all_scores,'Human Coded':these_train_labels+these_test_labels})
+        df1 = df1.sort_values(by=['Score'],ascending=False)
+        df1.to_excel(writer,'all tweets',index=False)
+
+        df2 = pd.DataFrame({'Tweet':test_text,'Score':predicted_scores,'Human Coded':these_test_labels})
+        df2 = df2.sort_values(by=['Score'],ascending=False)
+        df2.to_excel(writer,'ML test tweets',index=False)        
+
+        print(best_threshold)
+        # plt.figure()
+        # df2[predicted_labels!=these_test_labels]['Score'].plot(color='r',marker='o',linestyle=None)
+        # df2[predicted_labels==these_test_labels]['Score'].plot(color='g',marker='+',linestyle=None)
+        # plt.savefig('analysis/dist_{}.png'.format(cls))
+
+
 
 def score(train_text, train_labels, score_text, score_ids, classes_to_score=(0,)):
     """
@@ -424,9 +448,9 @@ def score(train_text, train_labels, score_text, score_ids, classes_to_score=(0,)
 
         # optimize and fit classifier on our training set
         svm = SVC(class_weight='balanced', kernel='linear')
-        clf_params = {'C': np.logspace(-3, 1, 64)}
-        search = GridSearchCV(svm, clf_params, scoring='average_precision',verbose=True).fit(X_train, these_train_labels)
-        svm = search.best_estimator_
+        # clf_params = {'C': np.logspace(-3, 1, 64)}
+        # search = GridSearchCV(svm, clf_params, scoring='average_precision',verbose=True).fit(X_train, these_train_labels)
+        # svm = search.best_estimator_
         svm.set_params(probability=True)
         svm.set_params(**params['clf_params'])
         svm.fit(X_train, these_train_labels)
