@@ -97,6 +97,7 @@ def load_data(data, train, test=None, text_key=(11, 23), id_key=(0,), scoring=Fa
     id_key = [str(k) for k in id_key]
     text_key = [str(k) for k in text_key]
 
+
     if data.endswith('json'):
         try:
             with open(data) as f:
@@ -126,6 +127,7 @@ def load_data(data, train, test=None, text_key=(11, 23), id_key=(0,), scoring=Fa
     test_labels = []
     all_text = []
     all_ids = []
+    timestamp = []
 
     for i, d in enumerate(main_data):
         if id_key == ['__index__']:
@@ -134,6 +136,7 @@ def load_data(data, train, test=None, text_key=(11, 23), id_key=(0,), scoring=Fa
             key = '_'.join([str(d[k]) for k in id_key])
         text = ' '.join([str(d[k]) for k in text_key])
         text = text.replace('\\N', '')
+        
         if key in train_data:
             train_text.append(text)
             label = train_data[key]
@@ -149,6 +152,7 @@ def load_data(data, train, test=None, text_key=(11, 23), id_key=(0,), scoring=Fa
         if scoring:
             all_text.append(text)
             all_ids.append(key)
+            timestamp.append(d['time'])
 
     n_train = len(train_text)
     n_test = len(test_text)
@@ -158,6 +162,7 @@ def load_data(data, train, test=None, text_key=(11, 23), id_key=(0,), scoring=Fa
     assert len(train_labels) == n_train
     assert len(test_labels) == n_test
     assert len(all_ids) == n_all
+    assert len(timestamp) == n_all
 
     if VERBOSE:
         print("Loaded {} train examples and {} test examples. Took {}s".format(n_train, n_test, time.time() - t0))
@@ -165,7 +170,7 @@ def load_data(data, train, test=None, text_key=(11, 23), id_key=(0,), scoring=Fa
     if not scoring:
         return train_text, train_labels, test_text, test_labels
     else:
-        return train_text + test_text, train_labels + test_labels, all_text, all_ids
+        return train_text + test_text, train_labels + test_labels, all_text, all_ids, timestamp
 
 
 def train(train_text, train_labels, test_text, test_labels, classes_to_train=(0,)):
@@ -415,7 +420,7 @@ def analyze(train_text, train_labels, test_text, test_labels, classes_to_analyze
 
 
 
-def score(train_text, train_labels, score_text, score_ids, classes_to_score=(0,)):
+def score(train_text, train_labels, score_text, score_ids, timestamp, classes_to_score=(0,)):
     """
     
     This takes the classifier parameters obtained from running train, trains a classifier on train_text/train_labels
@@ -447,7 +452,7 @@ def score(train_text, train_labels, score_text, score_ids, classes_to_score=(0,)
         X_train = X[:n_train]
 
         # optimize and fit classifier on our training set
-        svm = SVC(class_weight='balanced', kernel='linear')
+        svm = SVC(class_weight='balanced', kernel='linear', verbose=True)
         # clf_params = {'C': np.logspace(-3, 1, 64)}
         # search = GridSearchCV(svm, clf_params, scoring='average_precision',verbose=True).fit(X_train, these_train_labels)
         # svm = search.best_estimator_
@@ -458,8 +463,13 @@ def score(train_text, train_labels, score_text, score_ids, classes_to_score=(0,)
         # Score all text
         score = svm.predict_proba(X)[:, 1]
         scored_samples = {}
-        for i, s in zip(score_ids, score):
-            scored_samples[i] = s
+        # for i, s in zip(score_ids, score):
+        #     scored_samples[i] = [s,timestamp[i]]
+        print(len(score),len(timestamp),len(score_ids),len(train_text))
+
+        for i in range(len(score_ids)):
+            scored_samples[score_ids[i]] = [score[len(train_text)+i],timestamp[i]]
+
 
         out_filename = 'scores/scored_class{}.json'.format(cls)
 

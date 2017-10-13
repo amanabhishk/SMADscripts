@@ -27,9 +27,9 @@ def fix_data(text, labels):
 def main(data, train, test=None):
 
     classes_to_score = [0, 1, 2, 3, 4]
-    train_text, train_labels, score_text, score_ids = load_data(data, train, test, id_key='__index__', text_key='text', scoring=True)
+    train_text, train_labels, score_text, score_ids, timestamps = load_data(data, train, test, id_key='__index__', text_key='text', scoring=True)
     train_text, train_labels = fix_data(train_text, train_labels)
-    score(train_text, train_labels, score_text, score_ids,classes_to_score)
+    score(train_text, train_labels, score_text, score_ids, timestamps, classes_to_score)
 
 
 if __name__ == '__main__':
